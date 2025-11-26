@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rituals × Cohort | Intuitia Collection Case Study</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@17/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body {
+            background-color: #0a0a0a;
+            overflow-x: hidden;
+        }
+        @font-face {
+            font-family: 'SF Pro Display';
+            src: local('SF Pro Display');
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        
+        const { useState, useEffect, useRef } = React;
+
+        const useCountUp = (endValue, duration = 2000, isVisible) => {
+            const [count, setCount] = useState(0);
+            const frameRef = useRef(null);
+            const startTimeRef = useRef(null);
+
+            const easeOutCubic = (t) => (--t) * t * t + 1;
+
+            useEffect(() => {
+                if (!isVisible) {
+                    setCount(0);
+                    startTimeRef.current = null;
+                    if (frameRef.current) {
+                        cancelAnimationFrame(frameRef.current);
+                    }
+                    return;
+                }
+
+                const animate = (timestamp) => {
+                    if (!startTimeRef.current) {
+                        startTimeRef.current = timestamp;
+                    }
+
+                    const elapsed = timestamp - startTimeRef.current;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const easedProgress = easeOutCubic(progress);
+                    
+                    const currentCount = easedProgress * endValue;
+                    setCount(currentCount);
+
+                    if (progress < 1) {
+                        frameRef.current = requestAnimationFrame(animate);
+                    } else {
+                        setCount(endValue);
+                        startTimeRef.current = null;
+                    }
+                };
+
+                frameRef.current = requestAnimationFrame(animate);
+
+                return () => {
+                    if (frameRef.current) {
+                        cancelAnimationFrame(frameRef.current);
+                    }
+                    startTimeRef.current = null;
+                };
+            }, [endValue, duration, isVisible]);
+
+            return count;
+        };
+
+        const AnimatedMetric = ({ 
+            endValue, 
+            isVisible, 
+            prefix = '', 
+            suffix = '', 
+            decimals = 0,
+            formattingFn,
+            style = {}
+        }) => {
+            const count = useCountUp(endValue, 2000, isVisible);
+
+            const formatValue = (value) => {
+                if (formattingFn) {
+                    return formattingFn(value);
+                }
+                return value.toLocaleString(undefined, {
+                    minimumFractionDigits: decimals,
+                    maximumFractionDigits: decimals,
+                });
+            };
+
+            return (
+                <div style={style}>
+                    {prefix}{formatValue(count)}{suffix}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [scrollProgress, setScrollProgress] = useState(0);
+            const [activeSection, setActiveSection] = useState(0);
+            const [sectionProgress, setSectionProgress] = useState({});
+            const sectionsRef = useRef([]);
+            const [visibleElements, setVisibleElements] = useState(new Set());
+            const [sortBy, setSortBy] = useState('engagement'); // Default sort
+
+            const colors = {
+                bg: '#0a0a0a',
+                bgAlt: '#1a1a1a',
+                bgCard: '#151515',
+                accent: '#d4af37',
+                accentDark: '#b8941f',
+                accentLight: '#f5e6c3',
+                cream: '#f5f1e8',
+                textPrimary: '#ffffff',
+                textSecondary: '#a0a0a0',
+                textMuted: '#707070',
+                border: '#2a2a2a',
+                borderLight: '#3a3a3a'
+            };
+
+            useEffect(() => {
+                const handleScroll = () => {
+                    const windowHeight = window.innerHeight;
+                    const documentHeight = document.documentElement.scrollHeight - windowHeight;
+                    const scrolled = window.scrollY;
+                    const progress = (scrolled / documentHeight) * 100;
+                    setScrollProgress(progress);
+
+                    sectionsRef.current.forEach((section, index) => {
+                        if (section) {
+                            const rect = section.getBoundingClientRect();
+                            const sectionHeight = section.offsetHeight;
+                            const viewportHeight = window.innerHeight;
+                            
+                            const sectionTop = rect.top;
+                            const sectionBottom = rect.bottom;
+                            
+                            if (sectionTop <= viewportHeight && sectionBottom >= 0) {
+                                const sectionScrollProgress = Math.max(0, Math.min(1, (viewportHeight - sectionTop) / (sectionHeight + viewportHeight)));
+                                
+                                setSectionProgress(prev => ({
+                                    ...prev,
+                                    [index]: sectionScrollProgress
+                                }));
+                                
+                                if (sectionTop < viewportHeight / 2 && sectionBottom > viewportHeight / 2) {
+                                    setActiveSection(index);
+                                }
+                            }
+                        }
+                    });
+                };
+
+                window.addEventListener('scroll', handleScroll);
+                handleScroll();
+                return () => window.removeEventListener('scroll', handleScroll);
+            }, []);
+
+            useEffect(() => {
+                const observer = new IntersectionObserver(
+                    (entries) => {
+                        entries.forEach(entry => {
+                            const id = entry.target.dataset.fadeId;
+                            if (entry.isIntersecting) {
+                                setVisibleElements(prev => new Set(prev).add(id));
+                            } else {
+                                setVisibleElements(prev => {
+                                    const next = new Set(prev);
+                                    next.delete(id);
+                                    return next;
+                                });
+                            }
+                        });
+                    },
+                    { 
+                        threshold: 0.3,
+                        rootMargin: '0px' 
+                    }
+                );
+
+                const elements = document.querySelectorAll('[data-fade-id]');
+                elements.forEach(el => observer.observe(el));
+                
+                return () => elements.forEach(el => observer.disconnect());
+            }, []);
+
+            const marketData = [
+                { market: 'Switzerland', creators: 3, engagement: 8.5, creator: 'Esther', videoLink: 'https://drive.google.com/file/d/1G5uBkAdqbV9xEoQSgJJIaTZYGmym582j/preview' },
+                { market: 'Germany', creators: 4, engagement: 8.0, creator: 'Caroline', videoLink: 'https://drive.google.com/file/d/1ldwE9QVOnKmn5Jrxow8aktCtPW5zsNMj/preview' },
+                { market: 'Austria', creators: 2, engagement: 8.3, creator: 'Mary', videoLink: 'https://drive.google.com/file/d/1NoenUL9P4MKOZmR-tjDFs4IJjHBHsqgY/preview' },
+                { market: 'Sweden', creators: 1, engagement: 7.9, creator: 'Elin', videoLink: 'https://drive.google.com/file/d/1P9SSwuByBOjGKZKzWrXPCOb5kfoQ5b54/preview' }
+            ];
+
+            const creatorData = [
+                {
+                    name: 'Caroline Reichel',
+                    handle: '@caropeony',
+                    location: 'Germany',
+                    followers: 168600,
+                    views: 3706,
+                    engagement: 103,
+                    engagementRate: 2.8,
+                    cpe: 16.5,
+                    profilePic: 'https://p19-common-sign-useastred.tiktokcdn-eu.com/tos-useast2a-avt-0068-euttp/c7c41184dda76ef4b53a3504156f6b2c~tplv-tiktokx-cropcenter:1080:1080.jpeg'
+                },
+                {
+                    name: 'Angkhana Hengtim',
+                    handle: '@angkhana.hengtim',
+                    location: 'Switzerland',
+                    followers: 15700,
+                    views: 1607,
+                    engagement: 350,
+                    engagementRate: 21.8,
+                    cpe: 1.2,
+                    profilePic: 'https://p77-sign-va.tiktokcdn.com/tos-maliva-avt-0068/93148293d21cb293ff86b758fb3fe5d3~tplv-tiktokx-cropcenter:1080:1080.jpeg'
+                },
+                {
+                    name: 'Salome Hänggi',
+                    handle: '@salome.haenggi',
+                    location: 'Switzerland',
+                    followers: 27500,
+                    views: 843,
+                    engagement: 124,
+                    engagementRate: 14.7,
+                    cpe: 3.4,
+                    profilePic: 'https://p16-sign-sg.tiktokcdn.com/tos-alisg-avt-0068/a82772931271b6af158d2f9a5aa474cd~tplv-tiktokx-cropcenter:100:100.jpeg'
+                },
+                {
+                    name: 'Ardijana Hajdari',
+                    handle: '@dianadari_',
+                    location: 'Switzerland',
+                    followers: 23900,
+                    views: 7729,
+                    engagement: 459,
+                    engagementRate: 5.9,
+                    cpe: 2.2,
+                    profilePic: 'https://drive.google.com/uc?export=view&id=11N7zysBhX4M1rnx3MxM_HEdJmBu6g8Hf'
+                },
+                {
+                    name: 'Esther Aguirre',
+                    handle: '@estheraguirr',
+                    location: 'Sweden',
+                    followers: 81200,
+                    views: 4075,
+                    engagement: 302,
+                    engagementRate: 7.4,
+                    cpe: 5.0,
+                    profilePic: 'https://p77-sign-va.tiktokcdn.com/tos-maliva-avt-0068/e77f7e1b4ff2a3b6cd18be85da5d11e8~tplv-tiktokx-cropcenter:1080:1080.jpeg'
+                },
+                {
+                    name: 'Kowser Berhanu',
+                    handle: '@diaryyy.jpg',
+                    location: 'Sweden',
+                    followers: 3200,
+                    views: 1471,
+                    engagement: 151,
+                    engagementRate: 10.3,
+                    cpe: 1.3,
+                    profilePic: 'https://p16-sign-va.tiktokcdn.com/tos-maliva-avt-0068/98a954d482cfda2bbea8a77f2386d3d2~tplv-tiktokx-cropcenter:1080:1080.jpeg'
+                },
+                {
+                    name: 'Elin Deninger',
+                    handle: '@elinmeadows',
+                    location: 'Sweden',
+                    followers: 16300,
+                    views: 17200,
+                    engagement: 1280,
+                    engagementRate: 7.4,
+                    cpe: 0.4,
+                    profilePic: 'https://drive.google.com/uc?export=view&id=1DfEosYLihV2QkVi6g5R7nOTbUBajTgsI'
+                },
+                {
+                    name: 'Rebecka Ringberg',
+                    handle: '@rebeckaslowliving',
+                    location: 'Sweden',
+                    followers: 77800,
+                    views: 3389,
+                    engagement: 458,
+                    engagementRate: 13.5,
+                    cpe: 0.9,
+                    profilePic: 'https://drive.google.com/uc?export=view&id=1a8PQxCpo7kQslCcqFnTdZeZtx33k7Zt7'
+                },
+                {
+                    name: 'Viktoria Siedova',
+                    handle: '@vickysyedv',
+                    location: 'Austria',
+                    followers: 293,
+                    views: 795,
+                    engagement: 63,
+                    engagementRate: 7.9,
+                    cpe: 3.2,
+                    profilePic: 'https://p19-common-sign-useastred.tiktokcdn-eu.com/tos-useast2a-avt-0068-euttp/466919398a37ce897c41da082af6ea0c~tplv-tiktokx-cropcenter:1080:1080.jpeg'
+                },
+                {
+                    name: 'Mariya Kostyukova',
+                    handle: '@mariya.kostyukova',
+                    location: 'Austria',
+                    followers: 15400,
+                    views: 2040,
+                    engagement: 276,
+                    engagementRate: 13.5,
+                    cpe: 0.5,
+                    profilePic: 'https://p77-sign-va.tiktokcdn.com/tos-maliva-avt-0068/0405a337682914979e0f82bc06b1e7f2~tplv-tiktokx-cropcenter:1080:1080.jpeg'
+                }
+            ];
+
+            const getSortedCreators = () => {
+                const sorted = [...creatorData];
+                switch(sortBy) {
+                    case 'engagement':
+                        return sorted.sort((a, b) => b.engagement - a.engagement);
+                    case 'engagementRate':
+                        return sorted.sort((a, b) => b.engagementRate - a.engagementRate);
+                    case 'views':
+                        return sorted.sort((a, b) => b.views - a.views);
+                    case 'cpe':
+                        return sorted.sort((a, b) => a.cpe - b.cpe); // Lower is better
+                    default:
+                        return sorted;
+                }
+            };
+
+            return (
+                <div style={{ backgroundColor: colors.bg, color: colors.textPrimary, fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+                    {/* Progress Bar */}
+                    <div 
+                        style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            height: '3px',
+                            width: `${scrollProgress}%`,
+                            background: `linear-gradient(90deg, ${colors.accent}, ${colors.accentLight})`,
+                            zIndex: 100,
+                            transition: 'width 0.1s ease-out'
+                        }}
+                    />
+
+                    {/* Section 1: Hero */}
+                    <section 
+                        ref={el => sectionsRef.current[0] = el}
+                        style={{ 
+                            minHeight: '100vh', 
+                            position: 'relative', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            background: `radial-gradient(circle at 50% 0%, ${colors.bgAlt} 0%, ${colors.bg} 100%)`
+                        }}
+                    >
+                        <div style={{ maxWidth: '1400px', margin: '0 auto', textAlign: 'center', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '6rem', paddingBottom: '6rem' }}>
+                            <div 
+                                data-fade-id="hero-logos"
+                                style={{
+                                    opacity: visibleElements.has('hero-logos') ? 1 : 0,
+                                    transform: visibleElements.has('hero-logos') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '40px',
+                                    marginBottom: '48px'
+                                }}
+                            >
+                                <img 
+                                    src="https://i.ibb.co/DfM91VG0/wearecohort-logo.jpg" 
+                                    alt="Cohort Logo" 
+                                    style={{ width: '120px', height: 'auto', borderRadius: '8px', opacity: 0.9 }}
+                                />
+                                
+                                <div style={{ fontSize: '32px', color: colors.accent, fontWeight: 300 }}>×</div>
+                                
+                                <img 
+                                    src="https://upload.wikimedia.org/wikipedia/commons/1/1c/Rituals_Cosmetics_logo.png" 
+                                    alt="Rituals Logo" 
+                                    style={{ height: '110px', width: 'auto' }}
+                                    onError={(e) => { 
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'block';
+                                    }}
+                                />
+                                <div style={{ 
+                                    fontSize: '48px', 
+                                    fontWeight: 300, 
+                                    letterSpacing: '0.1em',
+                                    color: colors.textPrimary,
+                                    textTransform: 'uppercase',
+                                    display: 'none'
+                                }}>
+                                    RITUALS
+                                </div>
+                            </div>
+
+                            <h2 
+                                data-fade-id="hero-subtitle"
+                                style={{
+                                    fontSize: '16px',
+                                    fontWeight: 500,
+                                    color: colors.accent,
+                                    letterSpacing: '0.15em',
+                                    textTransform: 'uppercase',
+                                    marginTop: '16px',
+                                    opacity: visibleElements.has('hero-subtitle') ? 1 : 0,
+                                    transform: visibleElements.has('hero-subtitle') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s'
+                                }}
+                            >
+                                Intuitia Collection Campaign
+                            </h2>
+
+                            <h1 
+                                data-fade-id="hero-title"
+                                style={{
+                                    fontSize: 'clamp(48px, 8vw, 108px)',
+                                    fontWeight: 200,
+                                    lineHeight: 1.1,
+                                    marginTop: '32px',
+                                    letterSpacing: '-0.02em',
+                                    opacity: visibleElements.has('hero-title') ? 1 : 0,
+                                    transform: visibleElements.has('hero-title') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s'
+                                }}
+                            >
+                                Premium Execution,<br/>Perfect Timing
+                            </h1>
+
+                            <p 
+                                data-fade-id="hero-description"
+                                style={{
+                                    fontSize: 'clamp(20px, 3vw, 28px)',
+                                    color: colors.textSecondary,
+                                    maxWidth: '800px',
+                                    margin: '40px auto 0',
+                                    lineHeight: 1.6,
+                                    fontWeight: 300,
+                                    opacity: visibleElements.has('hero-description') ? 1 : 0,
+                                    transform: visibleElements.has('hero-description') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s'
+                                }}
+                            >
+                                How quality-first creator partnerships delivered <span style={{ color: colors.accent, fontWeight: 400 }}>8.18% engagement</span> across four European markets in just 30 days
+                            </p>
+
+                            <div 
+                                data-fade-id="hero-metrics"
+                                style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                    gap: '32px',
+                                    maxWidth: '1000px',
+                                    margin: '64px auto 0',
+                                    opacity: visibleElements.has('hero-metrics') ? 1 : 0,
+                                    transform: visibleElements.has('hero-metrics') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.4s'
+                                }}
+                            >
+                                <div style={{
+                                    backgroundColor: colors.bgCard,
+                                    padding: '40px 32px',
+                                    borderRadius: '16px',
+                                    border: `1px solid ${colors.border}`,
+                                    backdropFilter: 'blur(10px)'
+                                }}>
+                                    <AnimatedMetric
+                                        endValue={42800}
+                                        isVisible={visibleElements.has('hero-metrics')}
+                                        formattingFn={(val) => `${(val / 1000).toFixed(1)}K`}
+                                        style={{ fontSize: '52px', fontWeight: 200, color: colors.accent }}
+                                    />
+                                    <div style={{ fontSize: '13px', color: colors.textMuted, marginTop: '12px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Total Views</div>
+                                </div>
+                                <div style={{
+                                    backgroundColor: colors.bgCard,
+                                    padding: '40px 32px',
+                                    borderRadius: '16px',
+                                    border: `1px solid ${colors.border}`,
+                                    backdropFilter: 'blur(10px)'
+                                }}>
+                                    <AnimatedMetric
+                                        endValue={8.18}
+                                        isVisible={visibleElements.has('hero-metrics')}
+                                        suffix="%"
+                                        decimals={2}
+                                        style={{ fontSize: '52px', fontWeight: 200, color: colors.accent }}
+                                    />
+                                    <div style={{ fontSize: '13px', color: colors.textMuted, marginTop: '12px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Engagement Rate</div>
+                                </div>
+                                <div style={{
+                                    backgroundColor: colors.bgCard,
+                                    padding: '40px 32px',
+                                    borderRadius: '16px',
+                                    border: `1px solid ${colors.border}`,
+                                    backdropFilter: 'blur(10px)'
+                                }}>
+                                    <AnimatedMetric
+                                        endValue={30}
+                                        isVisible={visibleElements.has('hero-metrics')}
+                                        style={{ fontSize: '52px', fontWeight: 200, color: colors.accent }}
+                                    />
+                                    <div style={{ fontSize: '13px', color: colors.textMuted, marginTop: '12px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Days to Launch</div>
+                                </div>
+                                <div style={{
+                                    backgroundColor: colors.bgCard,
+                                    padding: '40px 32px',
+                                    borderRadius: '16px',
+                                    border: `1px solid ${colors.border}`,
+                                    backdropFilter: 'blur(10px)'
+                                }}>
+                                    <AnimatedMetric
+                                        endValue={2}
+                                        isVisible={visibleElements.has('hero-metrics')}
+                                        prefix="$"
+                                        style={{ fontSize: '52px', fontWeight: 200, color: colors.accent }}
+                                    />
+                                    <div style={{ fontSize: '13px', color: colors.textMuted, marginTop: '12px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Cost Per Engagement</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Section 2: The Challenge */}
+                    <section 
+                        ref={el => sectionsRef.current[1] = el}
+                        style={{ 
+                            minHeight: '100vh', 
+                            backgroundColor: colors.bgAlt, 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            position: 'relative',
+                            overflow: 'hidden'
+                        }}
+                    >
+                        <div style={{
+                            position: 'absolute',
+                            top: '10%',
+                            right: '-10%',
+                            width: '500px',
+                            height: '500px',
+                            background: `radial-gradient(circle, ${colors.accent}15 0%, transparent 70%)`,
+                            borderRadius: '50%',
+                            filter: 'blur(80px)'
+                        }} />
+
+                        <div style={{ maxWidth: '1400px', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '6rem', paddingBottom: '6rem', width: '100%', position: 'relative', zIndex: 1 }}>
+                            <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+                                <h2 
+                                    data-fade-id="challenge-title"
+                                    style={{
+                                        fontSize: 'clamp(40px, 6vw, 72px)',
+                                        fontWeight: 200,
+                                        lineHeight: 1.2,
+                                        marginBottom: '24px',
+                                        letterSpacing: '-0.02em',
+                                        opacity: visibleElements.has('challenge-title') ? 1 : 0,
+                                        transform: visibleElements.has('challenge-title') ? 'translateY(0)' : 'translateY(30px)',
+                                        transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                                    }}
+                                >
+                                    The Challenge
+                                </h2>
+                                <p 
+                                    data-fade-id="challenge-subtitle"
+                                    style={{
+                                        fontSize: 'clamp(20px, 3vw, 28px)',
+                                        color: colors.textSecondary,
+                                        marginBottom: '64px',
+                                        lineHeight: 1.6,
+                                        fontWeight: 300,
+                                        opacity: visibleElements.has('challenge-subtitle') ? 1 : 0,
+                                        transform: visibleElements.has('challenge-subtitle') ? 'translateY(0)' : 'translateY(30px)',
+                                        transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s'
+                                    }}
+                                >
+                                    When quality meets urgency in a limited edition launch
+                                </p>
+
+                                <div style={{ display: 'grid', gap: '32px' }}>
+                                    {[
+                                        { 
+                                            number: '01', 
+                                            title: 'Quality Control Crisis', 
+                                            desc: 'Previous vendor experiences left Rituals needing content that truly matched their premium brand standards. The aesthetic had to embody natural luxury not overly polished, but intentionally refined.' 
+                                        },
+                                        { 
+                                            number: '02', 
+                                            title: 'Impossible Timeline', 
+                                            desc: 'Starting mid-August for early September launch of a limited edition collection that historically sells out quickly. 30 days to source, ship, create, review, and approve content across four European markets.' 
+                                        },
+                                        { 
+                                            number: '03', 
+                                            title: 'Team Transition', 
+                                            desc: 'Mid-campaign handoff as the primary contact became unavailable. New stakeholders needed to get up to speed immediately while maintaining momentum and quality standards.' 
+                                        },
+                                        { 
+                                            number: '04', 
+                                            title: 'Multi-Market Complexity', 
+                                            desc: 'Switzerland, Germany, Austria, and Sweden each with unique shipping challenges, language requirements, and cultural nuances. All while maintaining consistent brand aesthetic and messaging.' 
+                                        }
+                                    ].map((item, i) => (
+                                        <div 
+                                            key={i}
+                                            data-fade-id={`challenge-${i}`}
+                                            style={{
+                                                backgroundColor: colors.bgCard,
+                                                padding: '40px',
+                                                borderRadius: '16px',
+                                                border: `1px solid ${colors.borderLight}`,
+                                                opacity: visibleElements.has(`challenge-${i}`) ? 1 : 0,
+                                                transform: visibleElements.has(`challenge-${i}`) ? 'translateY(0)' : 'translateY(30px)',
+                                                transition: `all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) ${0.2 + i * 0.1}s`,
+                                                position: 'relative',
+                                                overflow: 'hidden'
+                                            }}
+                                        >
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '-20px',
+                                                right: '-20px',
+                                                fontSize: '120px',
+                                                fontWeight: 100,
+                                                color: colors.accent,
+                                                opacity: 0.05,
+                                                lineHeight: 1
+                                            }}>
+                                                {item.number}
+                                            </div>
+                                            <div style={{ position: 'relative', zIndex: 1 }}>
+                                                <div style={{ fontSize: '14px', color: colors.accent, fontWeight: 500, marginBottom: '12px', letterSpacing: '0.1em' }}>
+                                                    {item.number}
+                                                </div>
+                                                <h3 style={{ fontSize: '24px', fontWeight: 400, marginBottom: '16px', color: colors.textPrimary }}>
+                                                    {item.title}
+                                                </h3>
+                                                <p style={{ fontSize: '16px', color: colors.textSecondary, lineHeight: 1.7, fontWeight: 300 }}>
+                                                    {item.desc}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Section 3: The Solution - Apple-style Feature Showcase */}
+                    <section 
+                        ref={el => sectionsRef.current[2] = el}
+                        style={{ minHeight: '300vh', position: 'relative' }}
+                    >
+                        <div style={{
+                            position: 'sticky',
+                            top: 0,
+                            height: '100vh',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            overflow: 'hidden',
+                            backgroundColor: colors.bg
+                        }}>
+                            {/* State 1: Dashboard Transparency */}
+                            <div style={{
+                                position: 'absolute',
+                                inset: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                opacity: (sectionProgress[2] || 0) < 0.33 ? 1 : 0,
+                                transition: 'opacity 1s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                                padding: '24px'
+                            }}>
+                                <div style={{ maxWidth: '1100px', textAlign: 'center' }}>
+                                    <div style={{ 
+                                        fontSize: '16px', 
+                                        color: colors.accent, 
+                                        fontWeight: 500, 
+                                        letterSpacing: '0.15em', 
+                                        textTransform: 'uppercase',
+                                        marginBottom: '24px'
+                                    }}>
+                                        The Cohort Approach
+                                    </div>
+                                    <h2 style={{ fontSize: 'clamp(40px, 6vw, 72px)', fontWeight: 200, marginBottom: '32px', letterSpacing: '-0.02em' }}>
+                                        Complete Transparency
+                                    </h2>
+                                    <p style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: colors.textSecondary, marginBottom: '64px', lineHeight: 1.6, fontWeight: 300 }}>
+                                        Real-time visibility into every stage through the Cohort Dashboard
+                                    </p>
+                                    
+                                    <div style={{
+                                        backgroundColor: colors.bgCard,
+                                        padding: '48px',
+                                        borderRadius: '24px',
+                                        border: `1px solid ${colors.borderLight}`,
+                                        textAlign: 'left'
+                                    }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '32px' }}>
+                                            {[
+                                                { icon: '✓', label: 'Creator Vetting', status: 'Real-time status' },
+                                                { icon: '✓', label: 'Content Review', status: 'Instant feedback' },
+                                                { icon: '✓', label: 'Approval Gates', status: 'Full control' },
+                                                { icon: '✓', label: 'Asset Delivery', status: 'On-demand access' }
+                                            ].map((item, i) => (
+                                                <div key={i} style={{ textAlign: 'center' }}>
+                                                    <div style={{ fontSize: '36px', marginBottom: '12px', color: colors.accent }}>
+                                                        {item.icon}
+                                                    </div>
+                                                    <div style={{ fontSize: '16px', fontWeight: 400, marginBottom: '4px' }}>
+                                                        {item.label}
+                                                    </div>
+                                                    <div style={{ fontSize: '13px', color: colors.textMuted }}>
+                                                        {item.status}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* State 2: Quality First */}
+                            <div style={{
+                                position: 'absolute',
+                                inset: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                opacity: (sectionProgress[2] || 0) >= 0.33 && (sectionProgress[2] || 0) < 0.66 ? 1 : 0,
+                                transition: 'opacity 1s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                                padding: '24px'
+                            }}>
+                                <div style={{ maxWidth: '1100px', textAlign: 'center' }}>
+                                    <div style={{ 
+                                        fontSize: '16px', 
+                                        color: colors.accent, 
+                                        fontWeight: 500, 
+                                        letterSpacing: '0.15em', 
+                                        textTransform: 'uppercase',
+                                        marginBottom: '24px'
+                                    }}>
+                                        Premium Standards
+                                    </div>
+                                    <h2 style={{ fontSize: 'clamp(40px, 6vw, 72px)', fontWeight: 200, marginBottom: '32px', letterSpacing: '-0.02em' }}>
+                                        Natural Luxury Aesthetic
+                                    </h2>
+                                    <p style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: colors.textSecondary, marginBottom: '64px', lineHeight: 1.6, fontWeight: 300, maxWidth: '800px', margin: '0 auto 64px' }}>
+                                        Content that embodies Rituals' essence: wholesome, European-centric, intentionally refined
+                                    </p>
+                                    
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', maxWidth: '900px', margin: '0 auto' }}>
+                                        <div style={{
+                                            backgroundColor: colors.bgCard,
+                                            padding: '40px',
+                                            borderRadius: '20px',
+                                            border: `1px solid ${colors.borderLight}`,
+                                            textAlign: 'left'
+                                        }}>
+                                            <div style={{ fontSize: '14px', color: colors.textMuted, marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                                Creator Selection
+                                            </div>
+                                            <ul style={{ fontSize: '16px', color: colors.textSecondary, lineHeight: 2, listStyle: 'none', padding: 0, fontWeight: 300 }}>
+                                                <li style={{ marginBottom: '8px' }}>• Values-aligned creators</li>
+                                                <li style={{ marginBottom: '8px' }}>• Natural, authentic presence</li>
+                                                <li style={{ marginBottom: '8px' }}>• Existing brand affinity</li>
+                                                <li>• Aesthetic coherence</li>
+                                            </ul>
+                                        </div>
+                                        <div style={{
+                                            backgroundColor: colors.bgCard,
+                                            padding: '40px',
+                                            borderRadius: '20px',
+                                            border: `1px solid ${colors.borderLight}`,
+                                            textAlign: 'left'
+                                        }}>
+                                            <div style={{ fontSize: '14px', color: colors.textMuted, marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                                Content Standards
+                                            </div>
+                                            <ul style={{ fontSize: '16px', color: colors.textSecondary, lineHeight: 2, listStyle: 'none', padding: 0, fontWeight: 300 }}>
+                                                <li style={{ marginBottom: '8px' }}>• Minimal revisions needed</li>
+                                                <li style={{ marginBottom: '8px' }}>• Natural lighting emphasis</li>
+                                                <li style={{ marginBottom: '8px' }}>• Lifestyle integration</li>
+                                                <li>• Premium production quality</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* State 3: Speed Meets Quality */}
+                            <div style={{
+                                position: 'absolute',
+                                inset: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                opacity: (sectionProgress[2] || 0) >= 0.66 ? 1 : 0,
+                                transition: 'opacity 1s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                                padding: '24px'
+                            }}>
+                                <div style={{ maxWidth: '1100px', width: '100%' }}>
+                                    <h2 style={{ fontSize: 'clamp(40px, 6vw, 72px)', fontWeight: 200, marginBottom: '24px', textAlign: 'center', letterSpacing: '-0.02em' }}>
+                                        30-Day Excellence
+                                    </h2>
+                                    <p style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: colors.textSecondary, marginBottom: '64px', textAlign: 'center', lineHeight: 1.6, fontWeight: 300 }}>
+                                        End-to-end campaign execution without compromising on quality
+                                    </p>
+                                    
+                                    <div style={{ 
+                                        display: 'grid', 
+                                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                                        gap: '24px',
+                                        maxWidth: '1000px',
+                                        margin: '0 auto'
+                                    }}>
+                                        {[
+                                            { week: 'Week 1', task: 'Creator Sourcing', detail: 'Vetted 10 premium creators' },
+                                            { week: 'Week 2', task: 'Product Shipping', detail: 'Coordinated across 4 markets' },
+                                            { week: 'Week 3', task: 'Content Creation', detail: 'Quality-first production' },
+                                            { week: 'Week 4', task: 'Review & Delivery', detail: 'On-time, on-brand' }
+                                        ].map((item, i) => (
+                                            <div key={i} style={{
+                                                backgroundColor: colors.bgCard,
+                                                padding: '32px 24px',
+                                                borderRadius: '16px',
+                                                border: `1px solid ${colors.borderLight}`,
+                                                textAlign: 'center'
+                                            }}>
+                                                <div style={{ fontSize: '14px', color: colors.accent, marginBottom: '12px', fontWeight: 500, letterSpacing: '0.1em' }}>
+                                                    {item.week}
+                                                </div>
+                                                <div style={{ fontSize: '18px', fontWeight: 400, marginBottom: '8px' }}>
+                                                    {item.task}
+                                                </div>
+                                                <div style={{ fontSize: '14px', color: colors.textMuted }}>
+                                                    {item.detail}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Section 4: Results by Market */}
+                    <section 
+                        ref={el => sectionsRef.current[3] = el}
+                        style={{ 
+                            minHeight: '100vh', 
+                            backgroundColor: colors.bgAlt, 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center' 
+                        }}
+                    >
+                        <div style={{ maxWidth: '1400px', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '6rem', paddingBottom: '6rem', width: '100%' }}>
+                            <h2 
+                                data-fade-id="results-title"
+                                style={{ 
+                                    fontSize: 'clamp(40px, 6vw, 72px)', 
+                                    fontWeight: 200, 
+                                    marginBottom: '24px',
+                                    textAlign: 'center',
+                                    letterSpacing: '-0.02em',
+                                    opacity: visibleElements.has('results-title') ? 1 : 0,
+                                    transform: visibleElements.has('results-title') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                                }}
+                            >
+                                Performance Across Europe
+                            </h2>
+                            <p 
+                                data-fade-id="results-subtitle"
+                                style={{ 
+                                    fontSize: 'clamp(20px, 3vw, 28px)', 
+                                    color: colors.textSecondary, 
+                                    marginBottom: '64px',
+                                    textAlign: 'center',
+                                    fontWeight: 300,
+                                    opacity: visibleElements.has('results-subtitle') ? 1 : 0,
+                                    transform: visibleElements.has('results-subtitle') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s'
+                                }}
+                            >
+                                Consistent quality, exceptional engagement
+                            </p>
+
+                            <div 
+                                data-fade-id="results-grid"
+                                style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                                    gap: '32px',
+                                    marginBottom: '64px',
+                                    opacity: visibleElements.has('results-grid') ? 1 : 0,
+                                    transform: visibleElements.has('results-grid') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s'
+                                }}
+                            >
+                                {marketData.map((market, i) => (
+                                    <div 
+                                        key={i}
+                                        style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '16px'
+                                        }}
+                                    >
+                                        {/* Stats Box */}
+                                        <div 
+                                            style={{
+                                                backgroundColor: colors.bgCard,
+                                                padding: '40px',
+                                                borderRadius: '20px',
+                                                border: `1px solid ${colors.borderLight}`,
+                                                textAlign: 'center'
+                                            }}
+                                        >
+                                            <h3 style={{ fontSize: '24px', fontWeight: 400, marginBottom: '24px' }}>
+                                                {market.market}
+                                            </h3>
+                                            <div style={{ marginBottom: '24px' }}>
+                                                <div style={{ fontSize: '48px', fontWeight: 200, color: colors.accent }}>
+                                                    {market.creators}
+                                                </div>
+                                                <div style={{ fontSize: '13px', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                                    Creators
+                                                </div>
+                                            </div>
+                                            <div style={{
+                                                padding: '16px',
+                                                backgroundColor: colors.bg,
+                                                borderRadius: '12px',
+                                                border: `1px solid ${colors.border}`
+                                            }}>
+                                                <div style={{ fontSize: '28px', fontWeight: 300, color: colors.accent }}>
+                                                    {market.engagement}%
+                                                </div>
+                                                <div style={{ fontSize: '12px', color: colors.textMuted, marginTop: '4px' }}>
+                                                    Avg. Engagement
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Video Box - Same width as stats box */}
+                                        <div 
+                                            style={{
+                                                backgroundColor: colors.bgCard,
+                                                borderRadius: '20px',
+                                                overflow: 'hidden',
+                                                border: `1px solid ${colors.borderLight}`
+                                            }}
+                                        >
+                                            <div style={{ 
+                                                position: 'relative', 
+                                                paddingBottom: '177.78%',
+                                                height: 0,
+                                                overflow: 'hidden',
+                                                backgroundColor: colors.bg
+                                            }}>
+                                                <iframe
+                                                    src={market.videoLink}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        left: 0,
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        border: 'none'
+                                                    }}
+                                                    allow="autoplay"
+                                                    allowFullScreen
+                                                    title={`${market.creator} - ${market.market}`}
+                                                />
+                                            </div>
+                                            <div style={{ 
+                                                padding: '16px', 
+                                                textAlign: 'center',
+                                                borderTop: `1px solid ${colors.borderLight}`
+                                            }}>
+                                                <div style={{ fontSize: '16px', fontWeight: 400, marginBottom: '4px', color: colors.textPrimary }}>
+                                                    {market.creator}
+                                                </div>
+                                                <div style={{ fontSize: '12px', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                                    Featured Creator
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div 
+                                data-fade-id="results-summary"
+                                style={{
+                                    background: `linear-gradient(135deg, ${colors.accent}08, ${colors.bgCard})`,
+                                    padding: '64px',
+                                    borderRadius: '24px',
+                                    border: `1px solid ${colors.accent}40`,
+                                    textAlign: 'center',
+                                    opacity: visibleElements.has('results-summary') ? 1 : 0,
+                                    transform: visibleElements.has('results-summary') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s'
+                                }}
+                            >
+                                <h3 style={{ fontSize: '32px', fontWeight: 300, marginBottom: '32px' }}>
+                                    Campaign Totals
+                                </h3>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '48px', maxWidth: '900px', margin: '0 auto' }}>
+                                    <div>
+                                        <AnimatedMetric
+                                            endValue={42800}
+                                            isVisible={visibleElements.has('results-summary')}
+                                            formattingFn={(val) => `${(val / 1000).toFixed(1)}K`}
+                                            style={{ fontSize: '56px', fontWeight: 200, color: colors.accent }}
+                                        />
+                                        <div style={{ fontSize: '13px', color: colors.textMuted, marginTop: '8px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total Views</div>
+                                    </div>
+                                    <div>
+                                        <AnimatedMetric
+                                            endValue={3000}
+                                            isVisible={visibleElements.has('results-summary')}
+                                            formattingFn={(val) => `${(val / 1000).toFixed(1)}K`}
+                                            style={{ fontSize: '56px', fontWeight: 200, color: colors.accent }}
+                                        />
+                                        <div style={{ fontSize: '13px', color: colors.textMuted, marginTop: '8px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total Likes</div>
+                                    </div>
+                                    <div>
+                                        <AnimatedMetric
+                                            endValue={3500}
+                                            isVisible={visibleElements.has('results-summary')}
+                                            formattingFn={(val) => `${(val / 1000).toFixed(1)}K`}
+                                            style={{ fontSize: '56px', fontWeight: 200, color: colors.accent }}
+                                        />
+                                        <div style={{ fontSize: '13px', color: colors.textMuted, marginTop: '8px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total Engagements</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* NEW SECTION: Creator Performance Breakdown */}
+                    <section 
+                        ref={el => sectionsRef.current[4] = el}
+                        style={{ 
+                            minHeight: '100vh', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            backgroundColor: colors.bg 
+                        }}
+                    >
+                        <div style={{ maxWidth: '1400px', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '6rem', paddingBottom: '6rem', width: '100%' }}>
+                            <h2 
+                                data-fade-id="creators-title"
+                                style={{ 
+                                    fontSize: 'clamp(40px, 6vw, 72px)', 
+                                    fontWeight: 200, 
+                                    marginBottom: '24px',
+                                    textAlign: 'center',
+                                    letterSpacing: '-0.02em',
+                                    opacity: visibleElements.has('creators-title') ? 1 : 0,
+                                    transform: visibleElements.has('creators-title') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                                }}
+                            >
+                                Creator Performance Breakdown
+                            </h2>
+                            <p 
+                                data-fade-id="creators-subtitle"
+                                style={{ 
+                                    fontSize: 'clamp(20px, 3vw, 28px)', 
+                                    color: colors.textSecondary, 
+                                    marginBottom: '48px',
+                                    textAlign: 'center',
+                                    fontWeight: 300,
+                                    opacity: visibleElements.has('creators-subtitle') ? 1 : 0,
+                                    transform: visibleElements.has('creators-subtitle') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s'
+                                }}
+                            >
+                                Individual metrics and performance analysis
+                            </p>
+
+                            {/* Top Performers Highlight */}
+                            <div 
+                                data-fade-id="top-performers"
+                                style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                                    gap: '24px',
+                                    marginBottom: '64px',
+                                    opacity: visibleElements.has('top-performers') ? 1 : 0,
+                                    transform: visibleElements.has('top-performers') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s'
+                                }}
+                            >
+                                {/* #1 - Elin Deninger */}
+                                <div style={{
+                                    background: `linear-gradient(135deg, ${colors.accent}15, ${colors.bgCard})`,
+                                    padding: '32px',
+                                    borderRadius: '20px',
+                                    border: `2px solid ${colors.accent}60`,
+                                    textAlign: 'center'
+                                }}>
+                                    <div style={{ fontSize: '14px', color: colors.accent, fontWeight: 500, marginBottom: '20px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                                        🥇 Highest Total Engagement
+                                    </div>
+                                    <img 
+                                        src="https://drive.google.com/thumbnail?id=1DfEosYLihV2QkVi6g5R7nOTbUBajTgsI&sz=w200"
+                                        alt="Elin Deninger"
+                                        style={{
+                                            width: '80px',
+                                            height: '80px',
+                                            borderRadius: '50%',
+                                            border: `3px solid ${colors.accent}`,
+                                            objectFit: 'cover',
+                                            marginBottom: '16px'
+                                        }}
+                                    />
+                                    <div style={{ fontSize: '18px', fontWeight: 400, marginBottom: '4px' }}>Elin Deninger</div>
+                                    <div style={{ fontSize: '13px', color: colors.accent, marginBottom: '16px' }}>@elinmeadows</div>
+                                    <div style={{ fontSize: '32px', fontWeight: 200, color: colors.accent }}>1,280</div>
+                                    <div style={{ fontSize: '12px', color: colors.textMuted, marginTop: '8px' }}>Total Engagements</div>
+                                </div>
+
+                                {/* #2 - Ardijana Hajdari */}
+                                <div style={{
+                                    background: `linear-gradient(135deg, #C0C0C015, ${colors.bgCard})`,
+                                    padding: '32px',
+                                    borderRadius: '20px',
+                                    border: `2px solid #C0C0C060`,
+                                    textAlign: 'center'
+                                }}>
+                                    <div style={{ fontSize: '14px', color: '#C0C0C0', fontWeight: 500, marginBottom: '20px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                                        🥈 2nd Highest Engagement
+                                    </div>
+                                    <img 
+                                        src="https://drive.google.com/thumbnail?id=11N7zysBhX4M1rnx3MxM_HEdJmBu6g8Hf&sz=w200"
+                                        alt="Ardijana Hajdari"
+                                        style={{
+                                            width: '80px',
+                                            height: '80px',
+                                            borderRadius: '50%',
+                                            border: `3px solid #C0C0C0`,
+                                            objectFit: 'cover',
+                                            marginBottom: '16px'
+                                        }}
+                                    />
+                                    <div style={{ fontSize: '18px', fontWeight: 400, marginBottom: '4px' }}>Ardijana Hajdari</div>
+                                    <div style={{ fontSize: '13px', color: '#C0C0C0', marginBottom: '16px' }}>@dianadari_</div>
+                                    <div style={{ fontSize: '32px', fontWeight: 200, color: '#C0C0C0' }}>459</div>
+                                    <div style={{ fontSize: '12px', color: colors.textMuted, marginTop: '8px' }}>Total Engagements</div>
+                                </div>
+
+                                {/* #3 - Rebecka Ringberg */}
+                                <div style={{
+                                    background: `linear-gradient(135deg, #CD7F3215, ${colors.bgCard})`,
+                                    padding: '32px',
+                                    borderRadius: '20px',
+                                    border: `2px solid #CD7F3260`,
+                                    textAlign: 'center'
+                                }}>
+                                    <div style={{ fontSize: '14px', color: '#CD7F32', fontWeight: 500, marginBottom: '20px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                                        🥉 3rd Highest Engagement
+                                    </div>
+                                    <img 
+                                        src="https://drive.google.com/thumbnail?id=1a8PQxCpo7kQslCcqFnTdZeZtx33k7Zt7&sz=w200"
+                                        alt="Rebecka Ringberg"
+                                        style={{
+                                            width: '80px',
+                                            height: '80px',
+                                            borderRadius: '50%',
+                                            border: `3px solid #CD7F32`,
+                                            objectFit: 'cover',
+                                            marginBottom: '16px'
+                                        }}
+                                    />
+                                    <div style={{ fontSize: '18px', fontWeight: 400, marginBottom: '4px' }}>Rebecka Ringberg</div>
+                                    <div style={{ fontSize: '13px', color: '#CD7F32', marginBottom: '16px' }}>@rebeckaslowliving</div>
+                                    <div style={{ fontSize: '32px', fontWeight: 200, color: '#CD7F32' }}>458</div>
+                                    <div style={{ fontSize: '12px', color: colors.textMuted, marginTop: '8px' }}>Total Engagements</div>
+                                </div>
+                            </div>
+
+                            {/* Sort Controls */}
+                            <div 
+                                data-fade-id="sort-controls"
+                                style={{ 
+                                    display: 'flex', 
+                                    justifyContent: 'center', 
+                                    gap: '16px', 
+                                    marginBottom: '48px',
+                                    flexWrap: 'wrap',
+                                    opacity: visibleElements.has('sort-controls') ? 1 : 0,
+                                    transform: visibleElements.has('sort-controls') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s'
+                                }}
+                            >
+                                <div style={{ fontSize: '14px', color: colors.textMuted, alignSelf: 'center', marginRight: '8px' }}>Sort by:</div>
+                                {[
+                                    { value: 'engagement', label: 'Total Engagement' },
+                                    { value: 'engagementRate', label: 'Engagement Rate' },
+                                    { value: 'views', label: 'Total Views' },
+                                    { value: 'cpe', label: 'Best CPE' }
+                                ].map(option => (
+                                    <button
+                                        key={option.value}
+                                        onClick={() => setSortBy(option.value)}
+                                        style={{
+                                            padding: '12px 24px',
+                                            borderRadius: '8px',
+                                            border: sortBy === option.value ? `2px solid ${colors.accent}` : `1px solid ${colors.borderLight}`,
+                                            backgroundColor: sortBy === option.value ? `${colors.accent}15` : colors.bgCard,
+                                            color: sortBy === option.value ? colors.accent : colors.textSecondary,
+                                            fontSize: '14px',
+                                            fontWeight: sortBy === option.value ? 500 : 300,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onMouseOver={(e) => {
+                                            if (sortBy !== option.value) {
+                                                e.target.style.borderColor = colors.accent;
+                                                e.target.style.backgroundColor = `${colors.accent}08`;
+                                            }
+                                        }}
+                                        onMouseOut={(e) => {
+                                            if (sortBy !== option.value) {
+                                                e.target.style.borderColor = colors.borderLight;
+                                                e.target.style.backgroundColor = colors.bgCard;
+                                            }
+                                        }}
+                                    >
+                                        {option.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Creator Performance Table */}
+                            <div 
+                                data-fade-id="creators-grid"
+                                style={{
+                                    opacity: visibleElements.has('creators-grid') ? 1 : 0,
+                                    transform: visibleElements.has('creators-grid') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.4s'
+                                }}
+                            >
+                                {/* Table Header */}
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '2fr 1.5fr 1fr 1fr 1fr 1fr 1fr',
+                                    gap: '16px',
+                                    padding: '20px 32px',
+                                    backgroundColor: colors.bgCard,
+                                    borderRadius: '16px 16px 0 0',
+                                    border: `1px solid ${colors.borderLight}`,
+                                    borderBottom: 'none',
+                                    fontSize: '12px',
+                                    fontWeight: 500,
+                                    color: colors.textMuted,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.1em'
+                                }}>
+                                    <div>Creator</div>
+                                    <div style={{ textAlign: 'center' }}>Location</div>
+                                    <div style={{ textAlign: 'right' }}>Followers</div>
+                                    <div style={{ textAlign: 'right' }}>Views</div>
+                                    <div style={{ textAlign: 'right' }}>Engagement</div>
+                                    <div style={{ textAlign: 'right' }}>ER %</div>
+                                    <div style={{ textAlign: 'right' }}>CPE</div>
+                                </div>
+
+                                {/* Table Rows */}
+                                {getSortedCreators().map((creator, i) => {
+                                    const isTopPerformer = i < 3;
+                                    const isBottomPerformer = i >= getSortedCreators().length - 3;
+
+                                    return (
+                                        <div 
+                                            key={i}
+                                            style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: '2fr 1.5fr 1fr 1fr 1fr 1fr 1fr',
+                                                gap: '16px',
+                                                padding: '24px 32px',
+                                                backgroundColor: colors.bgCard,
+                                                border: `1px solid ${colors.borderLight}`,
+                                                borderTop: i === 0 ? `1px solid ${colors.borderLight}` : 'none',
+                                                borderRadius: i === getSortedCreators().length - 1 ? '0 0 16px 16px' : '0',
+                                                alignItems: 'center',
+                                                transition: 'all 0.3s ease',
+                                                cursor: 'pointer',
+                                                position: 'relative',
+                                                overflow: 'hidden'
+                                            }}
+                                            onMouseOver={(e) => {
+                                                e.currentTarget.style.backgroundColor = colors.bg;
+                                                e.currentTarget.style.transform = 'translateX(4px)';
+                                            }}
+                                            onMouseOut={(e) => {
+                                                e.currentTarget.style.backgroundColor = colors.bgCard;
+                                                e.currentTarget.style.transform = 'translateX(0)';
+                                            }}
+                                        >
+                                            {/* Rank indicator on left edge */}
+                                            <div style={{
+                                                position: 'absolute',
+                                                left: 0,
+                                                top: 0,
+                                                bottom: 0,
+                                                width: '4px',
+                                                backgroundColor: isTopPerformer 
+                                                    ? (i === 0 ? colors.accent : i === 1 ? '#C0C0C0' : '#CD7F32')
+                                                    : 'transparent'
+                                            }} />
+
+                                            {/* Creator Name & Handle */}
+                                            <div style={{ paddingLeft: '12px' }}>
+                                                <div style={{ 
+                                                    fontSize: '16px', 
+                                                    fontWeight: 400, 
+                                                    marginBottom: '4px',
+                                                    color: colors.textPrimary,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px'
+                                                }}>
+                                                    {creator.name}
+                                                    {isTopPerformer && (
+                                                        <span style={{ fontSize: '18px' }}>
+                                                            {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div style={{ fontSize: '13px', color: colors.accent, fontWeight: 300 }}>
+                                                    {creator.handle}
+                                                </div>
+                                            </div>
+
+                                            {/* Location */}
+                                            <div style={{ 
+                                                textAlign: 'center', 
+                                                fontSize: '14px', 
+                                                color: colors.textSecondary 
+                                            }}>
+                                                {creator.location}
+                                            </div>
+
+                                            {/* Followers */}
+                                            <div style={{ 
+                                                textAlign: 'right', 
+                                                fontSize: '15px', 
+                                                fontWeight: 300,
+                                                color: colors.textPrimary 
+                                            }}>
+                                                {creator.followers >= 1000 ? `${(creator.followers / 1000).toFixed(1)}K` : creator.followers}
+                                            </div>
+
+                                            {/* Views */}
+                                            <div style={{ 
+                                                textAlign: 'right', 
+                                                fontSize: '15px', 
+                                                fontWeight: 300,
+                                                color: colors.textPrimary 
+                                            }}>
+                                                {creator.views >= 1000 ? `${(creator.views / 1000).toFixed(1)}K` : creator.views}
+                                            </div>
+
+                                            {/* Engagement */}
+                                            <div style={{ 
+                                                textAlign: 'right', 
+                                                fontSize: '15px', 
+                                                fontWeight: 400,
+                                                color: isTopPerformer ? colors.accent : colors.textPrimary 
+                                            }}>
+                                                {creator.engagement.toLocaleString()}
+                                            </div>
+
+                                            {/* Engagement Rate */}
+                                            <div style={{ 
+                                                textAlign: 'right', 
+                                                fontSize: '15px', 
+                                                fontWeight: 400,
+                                                color: creator.engagementRate >= 10 ? colors.accent : colors.textPrimary 
+                                            }}>
+                                                {creator.engagementRate}%
+                                            </div>
+
+                                            {/* CPE */}
+                                            <div style={{ 
+                                                textAlign: 'right', 
+                                                fontSize: '15px', 
+                                                fontWeight: 400,
+                                                color: creator.cpe <= 1.5 ? colors.accent : colors.textPrimary 
+                                            }}>
+                                                ${creator.cpe}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Section 5: Key Insights */}
+                    <section 
+                        ref={el => sectionsRef.current[5] = el}
+                        style={{ 
+                            minHeight: '100vh', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            backgroundColor: colors.bgAlt
+                        }}
+                    >
+                        <div style={{ maxWidth: '1400px', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '6rem', paddingBottom: '6rem' }}>
+                            <h2 
+                                data-fade-id="insights-title"
+                                style={{ 
+                                    fontSize: 'clamp(40px, 6vw, 72px)', 
+                                    fontWeight: 200, 
+                                    marginBottom: '24px',
+                                    textAlign: 'center',
+                                    letterSpacing: '-0.02em',
+                                    opacity: visibleElements.has('insights-title') ? 1 : 0,
+                                    transform: visibleElements.has('insights-title') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                                }}
+                            >
+                                What Made It Work
+                            </h2>
+
+                            <div style={{ display: 'grid', gap: '32px', maxWidth: '1000px', margin: '64px auto 0' }}>
+                                {[
+                                    {
+                                        title: 'Quality Over Quantity',
+                                        insight: 'Ten carefully vetted creators delivered better results than fifty generic partnerships. Each creator was selected for authentic alignment with Rituals\' values and aesthetic.',
+                                        metric: '8.18% average ER'
+                                    },
+                                    {
+                                        title: 'Dashboard Transparency',
+                                        insight: 'Real-time visibility enabled quick decisions during the team transition. Stakeholders could review progress, provide feedback, and approve content without delays.',
+                                        metric: 'Zero timeline slips'
+                                    },
+                                    {
+                                        title: 'Proactive Communication',
+                                        insight: 'From product shipping to asset delivery, we anticipated needs and kept all stakeholders aligned. No surprises, no delays, no last-minute scrambles.',
+                                        metric: 'Minimal revisions'
+                                    },
+                                    {
+                                        title: 'Premium Production Standards',
+                                        insight: 'Content that required minimal edits because we set clear expectations upfront. Creators understood the natural luxury aesthetic and delivered accordingly.',
+                                        metric: '$2 CPE efficiency'
+                                    }
+                                ].map((item, i) => (
+                                    <div 
+                                        key={i}
+                                        data-fade-id={`insight-${i}`}
+                                        style={{
+                                            backgroundColor: colors.bgCard,
+                                            padding: '48px',
+                                            borderRadius: '20px',
+                                            border: `1px solid ${colors.borderLight}`,
+                                            opacity: visibleElements.has(`insight-${i}`) ? 1 : 0,
+                                            transform: visibleElements.has(`insight-${i}`) ? 'translateY(0)' : 'translateY(30px)',
+                                            transition: `all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) ${0.1 + i * 0.1}s`
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
+                                            <h3 style={{ fontSize: '28px', fontWeight: 300, color: colors.textPrimary }}>
+                                                {item.title}
+                                            </h3>
+                                            <div style={{
+                                                padding: '8px 20px',
+                                                backgroundColor: colors.bg,
+                                                borderRadius: '20px',
+                                                border: `1px solid ${colors.accent}`,
+                                                fontSize: '14px',
+                                                color: colors.accent,
+                                                fontWeight: 500
+                                            }}>
+                                                {item.metric}
+                                            </div>
+                                        </div>
+                                        <p style={{ fontSize: '16px', color: colors.textSecondary, lineHeight: 1.8, fontWeight: 300 }}>
+                                            {item.insight}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Section 6: Impact & CTA */}
+                    <section 
+                        ref={el => sectionsRef.current[6] = el}
+                        style={{ 
+                            minHeight: '100vh', 
+                            backgroundColor: colors.bg,
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            position: 'relative',
+                            overflow: 'hidden'
+                        }}
+                    >
+                        <div style={{
+                            position: 'absolute',
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            width: '800px',
+                            height: '800px',
+                            background: `radial-gradient(circle, ${colors.accent}10 0%, transparent 70%)`,
+                            borderRadius: '50%',
+                            filter: 'blur(100px)'
+                        }} />
+
+                        <div style={{ maxWidth: '1100px', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '6rem', paddingBottom: '6rem', textAlign: 'center', position: 'relative', zIndex: 1 }}>
+                            <h2 
+                                data-fade-id="impact-title"
+                                style={{ 
+                                    fontSize: 'clamp(40px, 6vw, 72px)', 
+                                    fontWeight: 200, 
+                                    marginBottom: '32px',
+                                    lineHeight: 1.2,
+                                    letterSpacing: '-0.02em',
+                                    opacity: visibleElements.has('impact-title') ? 1 : 0,
+                                    transform: visibleElements.has('impact-title') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                                }}
+                            >
+                                Premium Doesn't Mean Slow
+                            </h2>
+                            <p 
+                                data-fade-id="impact-subtitle"
+                                style={{ 
+                                    fontSize: 'clamp(20px, 3vw, 28px)', 
+                                    color: colors.textSecondary, 
+                                    marginBottom: '64px',
+                                    lineHeight: 1.6,
+                                    fontWeight: 300,
+                                    maxWidth: '900px',
+                                    margin: '0 auto 64px',
+                                    opacity: visibleElements.has('impact-subtitle') ? 1 : 0,
+                                    transform: visibleElements.has('impact-subtitle') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s'
+                                }}
+                            >
+                                The Intuitia campaign proved that quality, speed, and transparency can coexist. 
+                                Strategic creator partnerships combined with efficient processes deliver exceptional results.
+                            </p>
+
+                            <div 
+                                data-fade-id="impact-stats"
+                                style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                    gap: '48px',
+                                    marginBottom: '80px',
+                                    maxWidth: '1000px',
+                                    margin: '0 auto 80px',
+                                    opacity: visibleElements.has('impact-stats') ? 1 : 0,
+                                    transform: visibleElements.has('impact-stats') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s'
+                                }}
+                            >
+                                <div>
+                                    <div style={{ fontSize: '64px', fontWeight: 200, color: colors.accent, marginBottom: '8px' }}>
+                                        10
+                                    </div>
+                                    <div style={{ fontSize: '14px', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                        Premium Creators
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '64px', fontWeight: 200, color: colors.accent, marginBottom: '8px' }}>
+                                        4
+                                    </div>
+                                    <div style={{ fontSize: '14px', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                        European Markets
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '64px', fontWeight: 200, color: colors.accent, marginBottom: '8px' }}>
+                                        30
+                                    </div>
+                                    <div style={{ fontSize: '14px', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                        Days to Launch
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '64px', fontWeight: 200, color: colors.accent, marginBottom: '8px' }}>
+                                        100%
+                                    </div>
+                                    <div style={{ fontSize: '14px', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                        On-Time Delivery
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div 
+                                data-fade-id="impact-cta"
+                                style={{
+                                    background: `linear-gradient(135deg, ${colors.bgCard}, ${colors.accent}08)`,
+                                    padding: '64px 48px',
+                                    borderRadius: '24px',
+                                    border: `1px solid ${colors.accent}30`,
+                                    maxWidth: '800px',
+                                    margin: '0 auto',
+                                    opacity: visibleElements.has('impact-cta') ? 1 : 0,
+                                    transform: visibleElements.has('impact-cta') ? 'translateY(0)' : 'translateY(30px)',
+                                    transition: 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s',
+                                    position: 'relative',
+                                    overflow: 'hidden'
+                                }}
+                            >
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '-50%',
+                                    right: '-20%',
+                                    width: '400px',
+                                    height: '400px',
+                                    background: `radial-gradient(circle, ${colors.accent}15 0%, transparent 70%)`,
+                                    borderRadius: '50%',
+                                    filter: 'blur(60px)',
+                                    pointerEvents: 'none'
+                                }} />
+                                <div style={{ position: 'relative', zIndex: 1 }}>
+                                    <h3 style={{ fontSize: '32px', fontWeight: 300, marginBottom: '20px' }}>
+                                        Ready to Elevate Your Creator Campaigns?
+                                    </h3>
+                                    <p style={{ fontSize: '16px', color: colors.textSecondary, marginBottom: '40px', fontWeight: 300, lineHeight: 1.7 }}>
+                                        Let's discuss how Cohort can deliver premium creator content that matches your brand's standards without compromising on timeline or quality.
+                                    </p>
+                                    <button 
+                                        style={{
+                                            background: `linear-gradient(135deg, ${colors.accent}, ${colors.accentLight})`,
+                                            color: colors.bg,
+                                            padding: '20px 56px',
+                                            borderRadius: '12px',
+                                            fontSize: '16px',
+                                            fontWeight: 500,
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease',
+                                            letterSpacing: '0.05em',
+                                            textTransform: 'uppercase',
+                                            boxShadow: `0 8px 24px ${colors.accent}40`
+                                        }}
+                                        onClick={() => window.open('https://cal.com/arron-daniels-wysmum/15min', '_blank')}
+                                        onMouseOver={(e) => {
+                                            e.target.style.transform = 'translateY(-2px)';
+                                            e.target.style.boxShadow = `0 12px 32px ${colors.accent}60`;
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.transform = 'translateY(0)';
+                                            e.target.style.boxShadow = `0 8px 24px ${colors.accent}40`;
+                                        }}
+                                    >
+                                        Schedule a Discovery Call
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ marginTop: '80px', fontSize: '13px', color: colors.textMuted, fontWeight: 300 }}>
+                                <p style={{ marginBottom: '8px', letterSpacing: '0.05em' }}>Cohort × Rituals · Intuitia Collection 2024</p>
+                                <p>Premium creator partnerships for brands that demand excellence</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
